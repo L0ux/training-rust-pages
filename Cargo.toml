@@ -22,6 +22,6 @@ opt-level = "z"
 lto = "fat"
 codegen-units = 1
 
-# Fix pour WASM
+# Fix pour WASM - utiliser getrandom 0.3 avec la feature wasm_js
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
