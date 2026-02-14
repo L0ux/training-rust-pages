@@ -18,54 +18,19 @@
             background: #000;
         }
 
+        /* Style pour le canvas que Bevy va créer */
         canvas {
             display: block;
-            width: 100vw;
-            height: 100vh;
+            width: 100vw !important;
+            height: 100vh !important;
             touch-action: none;
-        }
-
-        /* Loader invisible mais qui empêche les clics pendant le chargement */
-        #loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            z-index: 9999;
-            pointer-events: all;
-            opacity: 1;
-            transition: opacity 0.3s ease-out;
-        }
-
-        #loading.hidden {
-            opacity: 0;
-            pointer-events: none;
         }
     </style>
 </head>
 <body>
-<div id="loading"></div>
-<canvas id="bevy"></canvas>
-
 <script type="module">
     import init from './bevy_game.js';
-
-    async function run() {
-        try {
-            await init();
-
-            // Petit délai pour s'assurer que le rendu est prêt
-            requestAnimationFrame(() => {
-                document.getElementById('loading').classList.add('hidden');
-            });
-        } catch (error) {
-            console.error('Erreur de chargement:', error);
-        }
-    }
-
-    run();
+    init();
 </script>
 </body>
 </html>
