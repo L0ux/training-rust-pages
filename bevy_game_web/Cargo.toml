@@ -1,0 +1,23 @@
+[package]
+name = "bevy_game"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy = "0.15"
+
+# Optimisations pour la compilation en développement
+[profile.dev]
+opt-level = 1
+
+# Optimisations pour le build release
+[profile.release]
+opt-level = 3
+lto = "thin"
+
+# Config spécifique pour WASM
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
