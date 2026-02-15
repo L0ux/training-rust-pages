@@ -1,87 +1,66 @@
 use bevy::prelude::*;
+use bevy::render::camera::ViewportConversionError;
 
 fn main() {
     App::new()
-        // Plugins Bevy par défaut (fenêtre, rendu, input, etc.)
-        .add_plugins(DefaultPlugins)
-        // Notre système de setup (lance une seule fois au démarrage)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: (480.0, 854.0).into(),
+                resizable: false,
+                ..default()
+            }),
+            ..default()
+        }))
         .add_systems(Startup, setup)
-        // Nos systèmes de gameplay (tournent chaque frame)
-        .add_systems(Update, (move_player, rotate_player))
+        .add_systems(Update, move_square_on_click)
         .run();
 }
 
-// === COMPONENTS (les données) ===
-
-#[derive(Component)]
-struct Player;
-
-#[derive(Component)]
-struct Velocity {
-    x: f32,
-    y: f32,
-}
-
-// === SYSTEMS (la logique) ===
-
-/// System de setup : spawn le joueur
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    // Spawner la caméra 2D
     commands.spawn(Camera2d);
 
-    // Spawner le joueur (un carré rouge)
     commands.spawn((
-        Player,
-        Velocity { x: 0.0, y: 0.0 },
-        Mesh2d(meshes.add(Rectangle::new(50.0, 50.0))),
-        MeshMaterial2d(materials.add(Color::srgb(1.0, 0.0, 0.0))),
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        Text::new("Bonjour Jul, ca avance bien ! \nEssaie de faire bouger la boule !"),
+        TextFont {
+            font_size: 20.0,
+            ..Default::default()
+        },
+        Transform::from_xyz(0.0, 300.0, 0.0),
+    ));
+
+    commands.spawn((
+        Mesh2d(meshes.add(Circle::new(50.0))),
+        MeshMaterial2d(materials.add(Color::srgb(255.0, 0.0, 0.0))),
+        Square,
     ));
 }
 
-/// System : déplacer le joueur avec ZQSD/Flèches
-fn move_player(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut Velocity), With<Player>>,
-    time: Res<Time>,
+fn move_square_on_click(
+    mut square_query: Query<&mut Transform, With<Square>>,
+    buttons: Res<ButtonInput<MouseButton>>,
+    windows: Query<&Window>,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
 ) {
-    for (mut transform, mut velocity) in query.iter_mut() {
-        let speed = 200.0;
+    if buttons.pressed(MouseButton::Left) {
+        if let Ok(window) = windows.get_single() {
+            let mut square = square_query.single_mut();
+            let (camera, camera_transform) = camera_query.single();
 
-        // Reset velocity
-        velocity.x = 0.0;
-        velocity.y = 0.0;
-
-        // Input
-        if keyboard_input.pressed(KeyCode::KeyW) || keyboard_input.pressed(KeyCode::ArrowUp) {
-            velocity.y += speed;
+            if let Some(cursor_position) = window.cursor_position() {
+                if let Ok(camera_position) =
+                    camera.viewport_to_world_2d(camera_transform, cursor_position)
+                {
+                    square.translation.x = camera_position.x;
+                    square.translation.y = camera_position.y;
+                }
+            }
         }
-        if keyboard_input.pressed(KeyCode::KeyS) || keyboard_input.pressed(KeyCode::ArrowDown) {
-            velocity.y -= speed;
-        }
-        if keyboard_input.pressed(KeyCode::KeyA) || keyboard_input.pressed(KeyCode::ArrowLeft) {
-            velocity.x -= speed;
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) || keyboard_input.pressed(KeyCode::ArrowRight) {
-            velocity.x += speed;
-        }
-
-        // Appliquer le mouvement
-        transform.translation.x += velocity.x * time.delta_secs();
-        transform.translation.y += velocity.y * time.delta_secs();
     }
 }
 
-/// System : rotation automatique du joueur
-fn rotate_player(
-    mut query: Query<&mut Transform, With<Player>>,
-    time: Res<Time>,
-) {
-    for mut transform in query.iter_mut() {
-        transform.rotation *= Quat::from_rotation_z(time.delta_secs() * 2.0);
-    }
-}
+#[derive(Component)]
+struct Square;
