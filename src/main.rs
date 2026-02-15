@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::camera::ViewportConversionError;
+use bevy::tasks::futures_lite::StreamExt;
 
 fn main() {
     App::new()
@@ -42,24 +43,32 @@ fn setup(
 fn move_square_on_click(
     mut square_query: Query<&mut Transform, With<Square>>,
     buttons: Res<ButtonInput<MouseButton>>,
+    touches: Res<Touches>,
     windows: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
 ) {
-    if buttons.pressed(MouseButton::Left) {
-        if let Ok(window) = windows.get_single() {
-            let mut square = square_query.single_mut();
-            let (camera, camera_transform) = camera_query.single();
+    let mut square = square_query.single_mut();
+    let window = windows.single();
+    let (camera, camera_transform) = camera_query.single();
 
-            if let Some(cursor_position) = window.cursor_position() {
-                if let Ok(camera_position) =
-                    camera.viewport_to_world_2d(camera_transform, cursor_position)
-                {
-                    square.translation.x = camera_position.x;
-                    square.translation.y = camera_position.y;
-                }
-            }
-        }
-    }
+    let position = if buttons.pressed(MouseButton::Left) {
+        window.cursor_position()
+    } else if let Some(touch) = touches.first_pressed_position() {
+        Some(touch)
+    } else {
+        None
+    };
+
+    let Some(screen_position) = position else {
+        return;
+    };
+
+    let Ok(final_position) = camera.viewport_to_world_2d(camera_transform, screen_position) else {
+        return;
+    };
+
+    square.translation.x = final_position.x;
+    square.translation.y = final_position.y;
 }
 
 #[derive(Component)]
