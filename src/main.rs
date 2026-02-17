@@ -14,7 +14,10 @@ fn main() {
         .add_systems(Update, move_player)
         .add_systems(Update, move_ball)
         .add_systems(Update, check_collision_player)
-        .add_systems(Update,check_collision_bricks)
+        .add_systems(Update, check_collision_bricks)
+        .add_systems(Update, check_collision_wall)
+        .add_systems(Update, check_victoire)
+        .init_resource::<GameState>()
         .run();
 }
 
@@ -31,6 +34,7 @@ fn setup(
             font_size: 20.0,
             ..Default::default()
         },
+        Texte,
     ));
 
     let player_size = Size {
@@ -43,6 +47,7 @@ fn setup(
         player_size,
         MeshMaterial2d(materials.add(Color::srgb(255.0, 255.0, 255.0))),
         Player,
+        GameEntity,
         Transform::from_xyz(0.0, -350.0, 0.0),
     ));
 
@@ -50,12 +55,13 @@ fn setup(
         Mesh2d(meshes.add(Circle::new(10.0))),
         MeshMaterial2d(materials.add(Color::srgb(255.0, 255.0, 255.0))),
         Ball,
+        GameEntity,
         Size {
             width: 10.0,
             height: 10.0,
         },
         Velocity { x: 0.0, y: -200.0 },
-        Transform::from_xyz(0.0, -200.0, 0.0),
+        Transform::from_xyz(0.0, -100.0, 0.0),
     ));
 
     let rows = 5;
@@ -82,6 +88,7 @@ fn setup(
                 Transform::from_xyz(x, y, 0.0),
                 brick_size,
                 Brick,
+                GameEntity,
             ));
         }
     }
@@ -94,7 +101,12 @@ fn move_player(
     windows: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform)>,
     time: Res<Time>,
+    game_state: Res<GameState>,
 ) {
+    if *game_state != GameState::Playing {
+        return;
+    }
+
     let mut player = players.single_mut();
     let window = windows.single();
     let (camera, camera_transform) = camera_query.single();
@@ -121,7 +133,15 @@ fn move_player(
     player.translation.x = player.translation.x + (final_position.x - player.translation.x) * alpha;
 }
 
-fn move_ball(mut balls: Query<(&mut Transform, &Velocity), With<Ball>>, time: Res<Time>) {
+fn move_ball(
+    mut balls: Query<(&mut Transform, &Velocity), With<Ball>>,
+    time: Res<Time>,
+    game_state: Res<GameState>,
+) {
+    if *game_state != GameState::Playing {
+        return;
+    }
+
     let (mut ball, velo) = balls.single_mut();
 
     ball.translation.x += time.delta_secs() * velo.x;
@@ -131,26 +151,46 @@ fn move_ball(mut balls: Query<(&mut Transform, &Velocity), With<Ball>>, time: Re
 fn check_collision_player(
     players: Query<(&Transform, &Size), With<Player>>,
     mut ball: Query<(&Transform, &mut Velocity, &Size), With<Ball>>,
+    game_state: ResMut<GameState>,
 ) {
-    let (player, player_size) = players.single();
-    let (ball, mut ball_velocity, ball_size) = ball.single_mut();
+    if *game_state != GameState::Playing {
+        return;
+    }
 
-    if ball.translation.x + ball_size.height > player.translation.x - player_size.width / 2.0
-        && ball.translation.x - ball_size.height < player.translation.x + player_size.width / 2.0
-        && ball.translation.y - ball_size.height < player.translation.y + player_size.height / 2.0
-        && ball.translation.y - ball_size.height > player.translation.y - player_size.height / 2.0
+    let (player_transform, player_size) = players.single();
+    let (ball_transform, mut ball_velocity, ball_size) = ball.single_mut();
+
+    if ball_transform.translation.x + ball_size.height
+        > player_transform.translation.x - player_size.width / 2.0
+        && ball_transform.translation.x - ball_size.height
+            < player_transform.translation.x + player_size.width / 2.0
+        && ball_transform.translation.y - ball_size.height
+            < player_transform.translation.y + player_size.height / 2.0
+        && ball_transform.translation.y - ball_size.height
+            > player_transform.translation.y - player_size.height / 2.0
     {
+        let distance_from_center = ball_transform.translation.x - player_transform.translation.x;
+        let marge = 5.0;
         ball_velocity.y = -ball_velocity.y;
+
+        if distance_from_center.abs() > marge {
+            let new_velocity_x = distance_from_center * 4.0;
+            ball_velocity.x = new_velocity_x.clamp(-300.0, 300.0);
+        }
     }
 }
 
 fn check_collision_bricks(
     mut commands: Commands,
     mut balls: Query<(&Transform, &mut Velocity, &Size), With<Ball>>,
-    bricks: Query<(Entity,&Transform, &Size), With<Brick>>,
+    bricks: Query<(Entity, &Transform, &Size), With<Brick>>,
+    game_state: ResMut<GameState>,
 ) {
-    let (ball_transform, mut ball_velocity, ball_size) = balls.single_mut();
+    if *game_state != GameState::Playing {
+        return;
+    }
 
+    let (ball_transform, mut ball_velocity, ball_size) = balls.single_mut();
 
     for (brick_entity, brick_transform, brick_size) in bricks.iter() {
         let ball_left = ball_transform.translation.x - ball_size.width / 2.0;
@@ -175,6 +215,69 @@ fn check_collision_bricks(
     }
 }
 
+fn check_collision_wall(
+    mut commands: Commands,
+    mut balls: Query<(&mut Transform, &mut Velocity, &Size), With<Ball>>,
+    mut game_state: ResMut<GameState>,
+    game_entities: Query<Entity, With<GameEntity>>,
+    mut textes: Query<&mut Text, With<Texte>>,
+) {
+    if *game_state != GameState::Playing {
+        return;
+    }
+
+    let screen_size = Size {
+        width: 480.0,
+        height: 800.0,
+    };
+
+    let (ball_transform, mut ball_velocity, ball_size) = balls.single_mut();
+
+    let ball_left = ball_transform.translation.x - ball_size.width / 2.0 < -screen_size.width / 2.0;
+    let ball_right = ball_transform.translation.x + ball_size.width / 2.0 > screen_size.width / 2.0;
+    let ball_up = ball_transform.translation.y + ball_size.height / 2.0 > screen_size.height / 2.0;
+    let ball_down =
+        ball_transform.translation.y + -ball_size.height / 2.0 < -screen_size.height / 2.0;
+
+    if ball_left || ball_right {
+        ball_velocity.x = -ball_velocity.x;
+    }
+
+    if ball_up {
+        ball_velocity.y = -ball_velocity.y;
+    }
+
+    if ball_down {
+        *game_state = GameState::GameOver;
+        let mut texte = textes.single_mut();
+        texte.0 = "Defaite".to_string();
+
+        for entity in game_entities.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn check_victoire(
+    mut commands: Commands,
+    mut game_state: ResMut<GameState>,
+    bricks: Query<Entity, With<Brick>>,
+    game_entities: Query<Entity, With<GameEntity>>,
+    mut textes: Query<&mut Text, With<Texte>>,
+) {
+    if *game_state == GameState::Victory || *game_state == GameState::GameOver {
+        return;
+    }
+
+    if bricks.is_empty() {
+        *game_state = GameState::Victory;
+        let mut texte = textes.single_mut();
+        texte.0 = "Victoire".to_string();
+        for entity in game_entities.iter() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
 #[derive(Component)]
 struct Player;
 
@@ -194,4 +297,18 @@ struct Velocity {
 struct Size {
     width: f32,
     height: f32,
+}
+
+#[derive(Component)]
+struct GameEntity;
+
+#[derive(Component)]
+struct Texte;
+
+#[derive(Resource, Default, PartialEq)]
+enum GameState {
+    #[default]
+    Playing,
+    GameOver,
+    Victory,
 }
