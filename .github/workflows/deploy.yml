@@ -17,6 +17,7 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.7.2
+  EM_VERSION: 4.0.11  # version utilisée par la CI officielle de Godot 4.7.2
 
 jobs:
   build:
@@ -49,6 +50,53 @@ jobs:
           curl -fsSL -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
           unzip -q -j /tmp/templates.tpz 'templates/web_*' 'templates/version.txt' -d "$tpl_dir"
           ls -la "$tpl_dir"
+
+      # --- Template web allégé (sans 3D, modules inutiles retirés) ---
+      # Compilé une seule fois puis mis en cache tant que la version de Godot
+      # et build_profile/web_template.py ne changent pas.
+      - name: Cache custom web template
+        id: cache-template
+        uses: actions/cache@v4
+        with:
+          path: ~/custom-template
+          key: web-template-${{ env.GODOT_VERSION }}-em${{ env.EM_VERSION }}-${{ hashFiles('build_profile/web_template.py') }}
+
+      - name: Checkout Godot source
+        if: steps.cache-template.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: ${{ env.GODOT_VERSION }}-stable
+          path: godot-src
+
+      - name: Set up Python
+        if: steps.cache-template.outputs.cache-hit != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Emscripten
+        if: steps.cache-template.outputs.cache-hit != 'true'
+        uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ env.EM_VERSION }}
+
+      - name: Build custom web template
+        if: steps.cache-template.outputs.cache-hit != 'true'
+        run: |
+          pip install scons
+          cd godot-src
+          scons profile="$GITHUB_WORKSPACE/build_profile/web_template.py" -j$(nproc)
+          mkdir -p ~/custom-template
+          cp bin/godot.web.template_release.wasm32*.zip ~/custom-template/web_nothreads_release.zip
+          ls -la bin ~/custom-template
+          # Sinon l'export Godot scannerait toutes les sources du moteur
+          cd .. && rm -rf godot-src
+
+      - name: Use custom web template
+        run: |
+          cp ~/custom-template/web_nothreads_release.zip \
+            "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/web_nothreads_release.zip"
 
       - name: Export Web
         run: |
