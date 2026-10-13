@@ -1,6 +1,50 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://main.gd" id="1"]
+[ext_resource type="PackedScene" path="res://paddle/paddle.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://ball/ball.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://hud/hud.tscn" id="4"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_side"]
+size = Vector2(40, 1000)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_top"]
+size = Vector2(620, 40)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_death"]
+size = Vector2(800, 40)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1")
+
+[node name="Walls" type="StaticBody2D" parent="."]
+
+[node name="Left" type="CollisionShape2D" parent="Walls"]
+position = Vector2(-20, 480)
+shape = SubResource("RectangleShape2D_side")
+
+[node name="Right" type="CollisionShape2D" parent="Walls"]
+position = Vector2(560, 480)
+shape = SubResource("RectangleShape2D_side")
+
+[node name="Top" type="CollisionShape2D" parent="Walls"]
+position = Vector2(270, 36)
+shape = SubResource("RectangleShape2D_top")
+
+[node name="Bricks" type="Node2D" parent="."]
+
+[node name="Paddle" parent="." instance=ExtResource("2")]
+position = Vector2(270, 878)
+
+[node name="Ball" parent="." instance=ExtResource("3")]
+position = Vector2(270, 861)
+
+[node name="DeathZone" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DeathZone"]
+position = Vector2(270, 1010)
+shape = SubResource("RectangleShape2D_death")
+
+[node name="HUD" parent="." instance=ExtResource("4")]
+
+[connection signal="body_entered" from="DeathZone" to="." method="_on_death_zone_body_entered"]
