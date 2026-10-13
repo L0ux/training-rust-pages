@@ -3,14 +3,10 @@
 #
 # Modifier ce fichier invalide le cache CI et relance la compilation du template (~30-45 min).
 
-platform = "web"
-target = "template_release"
-arch = "wasm32"
-threads = "no"  # doit correspondre à variant/thread_support=false dans export_presets.cfg
+# platform, target, arch, threads, production, optimize et lto sont passés en ligne
+# de commande dans le workflow : la plateforme web et le mode production ignorent
+# leurs valeurs quand elles viennent d'un profil.
 
-production = "yes"
-optimize = "size_extra"
-lto = "full"
 debug_symbols = "no"
 deprecated = "no"
 

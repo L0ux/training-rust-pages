@@ -83,15 +83,25 @@ jobs:
 
       - name: Build custom web template
         if: steps.cache-template.outputs.cache-hit != 'true'
+        shell: bash  # active pipefail pour le tee ci-dessous
         run: |
           pip install scons
           cd godot-src
-          scons profile="$GITHUB_WORKSPACE/build_profile/web_template.py" -j$(nproc)
+          # threads=no doit correspondre à variant/thread_support=false dans export_presets.cfg
+          scons platform=web target=template_release arch=wasm32 threads=no \
+            production=yes optimize=size_extra lto=full \
+            profile="$GITHUB_WORKSPACE/build_profile/web_template.py" -j$(nproc) 2>&1 | tee ~/scons.log
           mkdir -p ~/custom-template
           cp bin/godot.web.template_release.wasm32*.zip ~/custom-template/web_nothreads_release.zip
           ls -la bin ~/custom-template
           # Sinon l'export Godot scannerait toutes les sources du moteur
           cd .. && rm -rf godot-src
+
+      - name: Report template build errors
+        if: failure()
+        run: |
+          # Les logs ne sont lisibles qu'une fois connecté, les annotations sont publiques
+          [ -f ~/scons.log ] && grep -iE "error|cannot|undefined" ~/scons.log | tail -n 10 | sed 's/^/::error::/' || true
 
       - name: Use custom web template
         run: |
