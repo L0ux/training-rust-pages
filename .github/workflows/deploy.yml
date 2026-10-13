@@ -15,6 +15,9 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+env:
+  GODOT_VERSION: 4.7.2
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,49 +25,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install wasm-bindgen-cli
-        run: cargo install wasm-bindgen-cli
-
-      - name: Cache cargo registry
+      - name: Cache Godot
+        id: cache-godot
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build WASM
-        run: cargo build --release --target wasm32-unknown-unknown
-
-      - name: Generate bindings
+      - name: Install Godot + web export templates
+        if: steps.cache-godot.outputs.cache-hit != 'true'
         run: |
-          wasm-bindgen --out-dir ./dist \
-            --target web \
-            --no-typescript \
-            ./target/wasm32-unknown-unknown/release/bevy_game.wasm
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          tpl_dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p ~/godot "$tpl_dir"
 
-      - name: Copy HTML
-        run: cp index.html ./dist/
+          curl -fsSL -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
+
+          # On n'extrait que les templates web (l'archive complète fait ~1 Go)
+          curl -fsSL -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j /tmp/templates.tpz 'templates/web_*' 'templates/version.txt' -d "$tpl_dir"
+          ls -la "$tpl_dir"
+
+      - name: Export Web
+        run: |
+          ~/godot/godot --headless --import
+          mkdir -p build
+          ~/godot/godot --headless --export-release "Web" build/index.html
+          cp CNAME build/
+          ls -la build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: ./build
 
   deploy:
     environment:

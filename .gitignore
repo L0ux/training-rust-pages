@@ -1,17 +1,17 @@
-# Rust
-/target/
-Cargo.lock
+# Godot
+.godot/
+/build/
+*.translation
 
 # IDE
 .vscode/
-../.idea/
+.idea/
 *.swp
-*.swo
 *~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Web build
-/web/
+# Config locale Claude (serveur de test)
+.claude/
